@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title> Apinutchaya Wangkaew</title>
     
-    <!-- นำเข้าฟอนต์ Kanit และ Fira Code เพื่อความทันสมัย -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500&family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -52,7 +51,7 @@
             background: #94a3b8;
         }
 
-        /* ส่วนของ CV ด้านซ้ายมือ */
+         
         .cv-container {
             width: 420px;
             background-color: #ffffff;
@@ -150,7 +149,6 @@
             text-decoration: underline;
         }
 
-        /* ส่วนกล่องควบคุม Interactive Instructions */
         .instructions {
             background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
             padding: 18px;
@@ -219,7 +217,6 @@
             position: relative;
         }
 
-        /* กรอบตกแต่ง Canvas */
         .canvas-wrapper {
             position: relative;
             padding: 12px;
@@ -244,7 +241,6 @@
 </head>
 <body>
 
-    <!-- ================= ส่วนที่ 1: หน้า CV ================= -->
     <div class="cv-container">
         <h1>Interactive Computer Graphics</h1>
         <h2>Apinutchaya Wangkaew (Cartoon)</h2>
@@ -254,8 +250,8 @@
 
         <h3>About Me</h3>
         <p>
-            My name is Apinutchaya Wangkaew, but you can call me Cartoon. I am a Computer Science student at Kasetsart University, Faculty of Liberal Arts and Science. I enjoy learning programming, web development, interactive computer graphics, and creating digital artwork. I am always interested in improving my skills and learning new technologies.
-        </p>
+            My name is Apinutchaya Wangkaew, but you can call me Cartoon. <br>
+            I am a Computer Science student at Kasetsart University, Faculty of Liberal Arts and Science. 
 
         <h3>Education</h3>
         <p>Currently studying Computer Science at Kasetsart University, Faculty of Liberal Arts and Science.</p>
@@ -280,12 +276,13 @@
             ArrowRight :  Rotate Right<br>
             ArrowUp :  Scale UP <br>
             ArrowDown :  Scale Down<br>
+            MouseMove :  Move Sprite<br>
+
 
             <br>
                     </div>
     </div>
 
-    <!-- ================= ส่วนที่ 2: พื้นที่วาดกราฟิก (Canvas) ================= -->
     <div id="canvas-container">
         <canvas id="canvas" width="200" height="200"></canvas>
     </div>
@@ -533,7 +530,6 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-// เริ่มต้นการเรนเดอร์ loop
 animate();
 </script>
 </body>
