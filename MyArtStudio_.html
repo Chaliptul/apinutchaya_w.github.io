@@ -22,15 +22,12 @@
 </head>
 <body>
     <button id="reset-btn">back</button>
-
     <script>
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xffffcc);
-
         const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
         const initCamPos = new THREE.Vector3(0, 2, 5), initTarget = new THREE.Vector3();
         camera.position.copy(initCamPos);
-
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(innerWidth, innerHeight);
         renderer.shadowMap.enabled = true;
@@ -38,7 +35,6 @@
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(renderer.domElement);
-
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         const dirLight = new THREE.DirectionalLight(0xfffaed, 1.2);
@@ -62,14 +58,11 @@
 
         const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
         const resetBtn = document.getElementById('reset-btn');
-
         const tweenCam = (targetPos, targetLook, duration, showBtn) => {
             new TWEEN.Tween(camera.position).to(targetPos, duration).easing(TWEEN.Easing.Cubic.Out).start();
             new TWEEN.Tween(controls.target).to(targetLook, duration).easing(TWEEN.Easing.Cubic.Out).start();
             resetBtn.style.display = showBtn ? 'block' : 'none';
         };
-
-        // เพิ่ม Plane.004 และ Plane.006 ในรายชื่อวัตถุที่คลิกได้
         const clickableNames = [
             'Plane004', 'Plane.004',
             'Plane005', 'Plane.005',
@@ -85,7 +78,6 @@
             'Plane023', 'Plane.023',
             'Plane024', 'Plane.024'
         ];
-
         function getClickableObject(hitMesh) {
             let obj = hitMesh;
             while (obj && obj !== studioModel) {
@@ -95,55 +87,42 @@
             }
             return null;
         }
-
-        // Event คลิกเลือกวัตถุ
         window.addEventListener('click', (e) => {
             if (e.target === resetBtn || !studioModel) return;
             mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
             raycaster.setFromCamera(mouse, camera);
-
             const intersects = raycaster.intersectObjects(studioModel.children, true);
             if (intersects.length) {
                 const target = getClickableObject(intersects[0].object);
-                
                 if (target) {
                     const center = new THREE.Box3().setFromObject(target.object).getCenter(new THREE.Vector3());
                     let targetCamPos = new THREE.Vector3();
 
-                    // 1. Plane.004 และ Plane.006 - ให้กล้องอยู่ด้านบนแล้วก้มลงมามอง
                     if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(target.name)) {
                         targetCamPos.set(center.x, center.y + 1.2, center.z + 0.3);
                     }
-                    // 2. กระดาน/วัตถุทิศเดียวกับกระดาน (Plane.005, Plane.015) - ถอยกล้องหน้ากระดานทางแกน X
                     else if (['Plane005', 'Plane.005', 'Plane015', 'Plane.015'].includes(target.name)) {
                         targetCamPos.set(center.x + 1.1, center.y, center.z + 0.2);
                     } 
-                    // 3. ป้ายวางบนโต๊ะ/แถวพื้นหน้า (Plane.016)
                     else if (['Plane016', 'Plane.016'].includes(target.name)) {
                         targetCamPos.set(center.x, center.y + 0.1, center.z + 0.9);
                     }
-                    // 4. ป้ายติดผนังโซนด้านบน (Plane.007, Plane.008)
                     else if (['Plane007', 'Plane.007', 'Plane008', 'Plane.008'].includes(target.name)) {
                         targetCamPos.set(center.x, center.y, center.z + 0.85);
                     }
-                    // 5. ป้ายติดผนังโซนด้านล่าง (Plane.012, Plane.013, Plane.021 - Plane.024)
                     else {
                         targetCamPos.set(center.x, center.y, center.z + 0.8);
                     }
-
                     tweenCam(targetCamPos, center, 1200, true);
                 }
             }
         });
-
         window.addEventListener('mousemove', (e) => {
             if (!studioModel) return;
             mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
             raycaster.setFromCamera(mouse, camera);
-
             const intersects = raycaster.intersectObjects(studioModel.children, true);
             let isHovered = false;
-
             if (intersects.length) {
                 const target = getClickableObject(intersects[0].object);
                 if (target) isHovered = true;
@@ -151,16 +130,13 @@
             
             document.body.style.cursor = isHovered ? 'pointer' : 'default';
         });
-
         resetBtn.addEventListener('click', () => tweenCam(initCamPos, initTarget, 1000, false));
-
         (function animate(t) {
             requestAnimationFrame(animate);
             TWEEN.update(t);
             controls.update();
             renderer.render(scene, camera);
         })();
-
         window.addEventListener('resize', () => {
             camera.aspect = innerWidth / innerHeight;
             camera.updateProjectionMatrix();
