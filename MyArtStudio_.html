@@ -20,12 +20,24 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
-<body>
+<body> 
     <button id="reset-btn">Back to Studio</button>
 
     <script>
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xffffcc);
+        const canvas = document.createElement('canvas');
+        canvas.width = 2;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+        gradient.addColorStop(0.0, '#f6d365'); 
+        gradient.addColorStop(0.55, '#fda085'); 
+        gradient.addColorStop(1.0, '#556b2f'); 
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 2, 512);
+        const bgTexture = new THREE.CanvasTexture(canvas);
+        scene.background = bgTexture;
+        scene.fog = new THREE.Fog(0xd9541e, 8.0, 9.0);
         const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
         const initCamPos = new THREE.Vector3(0, 1.2, 2.5);
         camera.position.copy(initCamPos);
