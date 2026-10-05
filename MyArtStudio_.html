@@ -26,25 +26,23 @@
     <script>
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xffffcc);
-
         const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
         const initCamPos = new THREE.Vector3(0, 1.2, 2.5);
         camera.position.copy(initCamPos);
-
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(innerWidth, innerHeight);
-        renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); // เพิ่ม PixelRatio ตามอาจารย์
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(renderer.domElement);
-
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         const initTarget = new THREE.Vector3(0, 1, 0);
         controls.target.copy(initTarget);
         controls.update();
+
         const dirLight = new THREE.DirectionalLight(0xfffaed, 1.2);
         dirLight.position.set(5, 8, 5);
         dirLight.castShadow = true;
@@ -53,36 +51,102 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.7), dirLight, new THREE.DirectionalLight(0xffffff, 0.3));
         const uniforms = {
             uTime: { value: 0.0 },
-            uLightDir: { value: new THREE.Vector3(0.4, 1.0, 0.8).normalize() }
+            uLightDir: { value: new THREE.Vector3(0.4, 1.0, 0.8).normalize() },
+            uTexture: { value: new THREE.TextureLoader().load('https://threejs.org/examples/textures/uv_grid_opengl.jpg') }
         };
-        const toonVertexShader = `
+        const vertexShader = `
+            uniform float uTime;
+            varying vec2 vUv;
+            varying vec3 vNormal;
+
+            void main() {
+                vUv = uv;
+                vNormal = normal;
+                vec3 pos = position;
+                pos.z += sin(pos.x * 5.0 + uTime) * 0.2;
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
+            }
+        `;
+        const fragmentShader = `
+            precision mediump float;
+            uniform float uTime;
+            uniform sampler2D uTexture;
+            uniform vec3 uLightDir;
+            varying vec2 vUv;
+            varying vec3 vNormal;
+
+            void main() {
+                vec3 color = texture2D(uTexture, vUv).rgb;
+                vec3 N = normalize(vNormal);
+                vec3 L = normalize(uLightDir);
+                float diffuse = max(dot(N, L), 0.0);
+                float ambient = clamp(diffuse * 4.0, 0.5, 1.0);
+                diffuse = smoothstep(0.5, 0.6, diffuse);
+                color = color * (diffuse + ambient);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        const outlineVertexShader = `
+            uniform float uTime;
             varying vec2 vUv;
             varying vec3 vNormal;
             void main() {
                 vUv = uv;
-                vNormal = normalMatrix * normal;
-                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+                vNormal = normal;
+                vec3 pos = position;
+                pos.z += sin(pos.x * 5.0 + uTime) * 0.2;
+                pos += normal * 0.03; 
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
             }
         `;
-        const toonFragmentShader = `
+
+        const outlineFragmentShader = `
             precision mediump float;
+            uniform float uTime;
+            uniform sampler2D uTexture;
             uniform vec3 uLightDir;
             varying vec2 vUv;
             varying vec3 vNormal;
             void main() {
-                vec3 N = normalize(vNormal);
-                vec3 L = normalize(uLightDir);
-                float diffuse = max(dot(N, L), 0.0);
-                // Toon Shading Step
-                diffuse = smoothstep(0.4, 0.5, diffuse);
-                vec3 baseColor = vec3(0.9, 0.7, 0.5);
-                gl_FragColor = vec4(baseColor * (diffuse + 0.4), 1.0);
+                gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
             }
         `;
 
+        const material = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms,
+            side: THREE.DoubleSide
+        });
+
+        const outlineMaterial = new THREE.ShaderMaterial({
+            vertexShader: outlineVertexShader,
+            fragmentShader: outlineFragmentShader,
+            uniforms,
+            side: THREE.BackSide
+        });
+
+        const celObjects = [];
+
+        function addPickableObject(name, geometry, position) {
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = name;
+            mesh.position.copy(position);
+            const outlineMesh = new THREE.Mesh(geometry, outlineMaterial);
+            mesh.add(outlineMesh);
+            scene.add(mesh);
+            celObjects.push(mesh);
+            return mesh;
+        }
+
+        const celMesh = addPickableObject(
+            'CelShadedObject', 
+            new THREE.TorusKnotBufferGeometry(0.08, 0.03, 128, 32), 
+            new THREE.Vector3(0.8, 0.1, 0.1)
+        );
         const dracoLoader = new THREE.DRACOLoader().setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         const loader = new THREE.GLTFLoader().setDRACOLoader(dracoLoader).setMeshoptDecoder(MeshoptDecoder);
-        
         let studioModel;
         loader.load('https://chaliptul.github.io/apinutchaya_w.github.io/myartstudioclt.glb', (gltf) => {
             studioModel = gltf.scene;
@@ -94,6 +158,9 @@
             scene.add(studioModel);
         }, undefined, console.error);
 
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
         let targetCamPos = initCamPos.clone();
@@ -107,7 +174,7 @@
             'Plane013', 'Plane.013', 'Plane015', 'Plane.015',
             'Plane016', 'Plane.016', 'Plane021', 'Plane.021',
             'Plane022', 'Plane.022', 'Plane023', 'Plane.023',
-            'Plane024', 'Plane.024'
+            'Plane024', 'Plane.024', 'CelShadedObject'
         ];
         function getClickableObject(hitMesh) {
             let obj = hitMesh;
@@ -119,26 +186,24 @@
             return null;
         }
         renderer.domElement.addEventListener('click', onPick);
-
         function onPick(e) {
-            if (e.target === resetBtn || !studioModel) return;
-
+            if (e.target === resetBtn) return;
             const r = renderer.domElement.getBoundingClientRect();
-            const x = e.clientX - r.left;
-            const y = e.clientY - r.top;
+            const x = (e.clientX ?? e.touches[0].clientX) - r.left;
+            const y = (e.clientY ?? e.touches[0].clientY) - r.top;
             pointer.x = (x / r.width) * 2 - 1;
             pointer.y = -(y / r.height) * 2 + 1;
-
             raycaster.setFromCamera(pointer, camera);
-            const intersects = raycaster.intersectObjects(studioModel.children, true);
-
+            const targetsToIntersect = studioModel ? [studioModel, ...celObjects] : [...celObjects];
+            const intersects = raycaster.intersectObjects(targetsToIntersect, true);
             if (intersects.length > 0) {
-                const target = getClickableObject(intersects[0].object);
-                if (target) {
+                const target = getClickableObject(intersects[0].object) || { object: celMesh, name: 'CelShadedObject' };
+                if (target && target.object) {
                     const center = new THREE.Box3().setFromObject(target.object).getCenter(new THREE.Vector3());
                     targetLookAt.copy(center);
-
-                    if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(target.name)) {
+                    if (target.name === 'CelShadedObject') {
+                        targetCamPos.set(center.x, center.y, center.z + 0.8);
+                    } else if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(target.name)) {
                         targetCamPos.set(center.x, center.y + 1.2, center.z + 0.3);
                     } else if (['Plane005', 'Plane.005', 'Plane015', 'Plane.015'].includes(target.name)) {
                         targetCamPos.set(center.x + 1.1, center.y, center.z + 0.2);
@@ -149,20 +214,18 @@
                     } else {
                         targetCamPos.set(center.x, center.y, center.z + 0.8);
                     }
-
                     isFocusing = true;
                     resetBtn.style.display = 'block';
                 }
             }
         }
-
         window.addEventListener('mousemove', (e) => {
-            if (!studioModel) return;
             const r = renderer.domElement.getBoundingClientRect();
             pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
             pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const intersects = raycaster.intersectObjects(studioModel.children, true);
+            const targetsToIntersect = studioModel ? [studioModel, ...celObjects] : [...celObjects];
+            const intersects = raycaster.intersectObjects(targetsToIntersect, true);
             const isHovered = intersects.length && getClickableObject(intersects[0].object);
             document.body.style.cursor = isHovered ? 'pointer' : 'default';
         });
@@ -177,16 +240,16 @@
             renderer.setSize(innerWidth, innerHeight);
             renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
         });
-
         function animate(time) {
-            requestAnimationFrame(animate);
             uniforms.uTime.value = time * 0.001;
+            celMesh.position.y = lerp(0.5, 0.7, Math.sin(time * 0.002) * 0.5 + 0.5);
             if (isFocusing) {
-                controls.target.lerp(targetLookAt, 0.05);
+                controls.target.lerp(targetLookAt, 0.05); //[cite: 5]
                 camera.position.lerp(targetCamPos, 0.05);
-            }
+            } 
             controls.update();
             renderer.render(scene, camera);
+            requestAnimationFrame(animate);
         }
         requestAnimationFrame(animate);
     </script>
