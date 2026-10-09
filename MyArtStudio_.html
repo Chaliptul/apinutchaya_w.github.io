@@ -22,15 +22,16 @@
 </head>
 <body> 
     <button id="reset-btn">Back to Studio</button>
+
     <script>
         const scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(0xd9541e, 4.0, 9.0);
+        scene.fog = new THREE.Fog(0xd9541e, 4, 9);
 
         const bgCanvas = document.createElement('canvas');
         bgCanvas.width = 1; bgCanvas.height = 2;
         const ctx = bgCanvas.getContext('2d');
         const grad = ctx.createLinearGradient(0, 0, 0, 2);
-        grad.addColorStop(0.0, '#f6d365'); grad.addColorStop(0.55, '#fda085'); grad.addColorStop(1.0, '#556b2f');
+        grad.addColorStop(0, '#f6d365'); grad.addColorStop(0.55, '#fda085'); grad.addColorStop(1, '#556b2f');
         ctx.fillStyle = grad; ctx.fillRect(0, 0, 1, 2);
         scene.background = new THREE.CanvasTexture(bgCanvas);
 
@@ -58,10 +59,12 @@
         dirLight.shadow.mapSize.set(2048, 2048);
         dirLight.shadow.bias = -0.0001;
         scene.add(new THREE.AmbientLight(0xffffff, 0.7), dirLight, new THREE.DirectionalLight(0xffffff, 0.3));
+
         const uniforms = {
-            uTime: { value: 0.0 },
-            uLightDir: { value: new THREE.Vector3(0.5, 1.0, 0.7).normalize() }
+            uTime: { value: 0 },
+            uLightDir: { value: new THREE.Vector3(0.4, 1, 0.8).normalize() }
         };
+
         const waveChunk = `
             vec3 pos = position;
             if (uAnimated) {
@@ -69,29 +72,27 @@
                 pos.z += cos(pos.x * 12.0 + uTime * 2.0) * 0.012;
             }
         `;
+
         const celVertexShader = `
             uniform float uTime; uniform bool uAnimated;
-            varying vec3 vNormal, vViewPosition;
+            varying vec3 vNormal;
             void main() {
-                vNormal = normal;
+                vNormal = normalMatrix * normal;
                 ${waveChunk}
-                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                vViewPosition = -mvPosition.xyz;
-                gl_Position = projectionMatrix * mvPosition;
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
             }
         `;
 
         const celFragmentShader = `
             precision mediump float;
             uniform vec3 uLightDir, uBaseColor;
-            varying vec3 vNormal, vViewPosition;
+            varying vec3 vNormal;
             void main() {
-                vec3 N = normalize(vNormal), L = normalize(uLightDir);
-                float NdotL = dot(N, L);
-                vec3 baseColor = (NdotL > 0.72) ? mix(uBaseColor, vec3(1.0, 1.0, 0.95), 0.75) : 
-                                 (NdotL > 0.25) ? uBaseColor : uBaseColor * 0.45;
-                float rimFactor = smoothstep(0.65, 0.7, 1.0 - max(dot(normalize(vViewPosition), N), 0.0));
-                gl_FragColor = vec4(mix(baseColor, baseColor * 0.35, rimFactor), 1.0);
+                float NdotL = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+                float shadowStep = smoothstep(0.15, 0.35, NdotL);
+                float highlightStep = smoothstep(0.65, 0.85, NdotL);
+                vec3 color = mix(uBaseColor * 0.35, uBaseColor, shadowStep);
+                gl_FragColor = vec4(mix(color, uBaseColor * 1.4, highlightStep), 1.0);
             }
         `;
 
@@ -99,7 +100,7 @@
             uniform float uTime; uniform bool uAnimated;
             void main() {
                 ${waveChunk}
-                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos + normal * 0.003, 1.0);
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos + normal * 0.0025, 1.0);
             }
         `;
 
@@ -107,20 +108,23 @@
             const opts = { uniforms: { ...uniforms, uBaseColor: { value: baseColor }, uAnimated: { value: isAnimated } } };
             return {
                 mat: new THREE.ShaderMaterial({ ...opts, vertexShader: celVertexShader, fragmentShader: celFragmentShader, side: THREE.DoubleSide }),
-                outlineMat: new THREE.ShaderMaterial({ ...opts, vertexShader: outlineVertexShader, fragmentShader: 'precision mediump float; void main(){ gl_FragColor = vec4(0.05, 0.03, 0.02, 1.0); }', side: THREE.BackSide })
+                outlineMat: new THREE.ShaderMaterial({ ...opts, vertexShader: outlineVertexShader, fragmentShader: 'precision mediump float; void main(){ gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); }', side: THREE.BackSide })
             };
         }
 
         const cupBallGroup = new THREE.Group();
         cupBallGroup.name = 'CelCupBall';
+
         function createMeshWithOutline(geo, mats, pos) {
             const mesh = new THREE.Mesh(geo, mats.mat);
             mesh.add(new THREE.Mesh(geo, mats.outlineMat));
             if (pos) mesh.position.copy(pos);
             cupBallGroup.add(mesh);
         }
-        createMeshWithOutline(new THREE.CylinderGeometry(0.03, 0.045, 0.12, 32), createCelMaterials(new THREE.Vector3(0.75, 0.275, 0.275), false)); // #BF4646
-        createMeshWithOutline(new THREE.IcosahedronGeometry(0.03, 2), createCelMaterials(new THREE.Vector3(0.494, 0.675, 0.71), true), new THREE.Vector3(0, 0.085, 0)); // #7EACB5
+
+        createMeshWithOutline(new THREE.CylinderGeometry(0.03, 0.045, 0.12, 32), createCelMaterials(new THREE.Vector3(0.75, 0.275, 0.275), false));
+        createMeshWithOutline(new THREE.IcosahedronGeometry(0.03, 2), createCelMaterials(new THREE.Vector3(0.494, 0.675, 0.71), true), new THREE.Vector3(0, 0.085, 0));
+
         cupBallGroup.position.set(0, 0.75, 0.2);
         scene.add(cupBallGroup);
 
@@ -142,6 +146,7 @@
             'Plane021', 'Plane.021', 'Plane022', 'Plane.022', 'Plane023', 'Plane.023',
             'Plane024', 'Plane.024', 'CelCupBall'
         ]);
+
         function getClickableObject(hitMesh) {
             let obj = hitMesh;
             while (obj && obj !== studioModel) {
@@ -151,6 +156,7 @@
             }
             return null;
         }
+
         function updatePointerAndIntersect(e) {
             const r = renderer.domElement.getBoundingClientRect();
             pointer.x = (((e.clientX ?? e.touches?.[0]?.clientX ?? 0) - r.left) / r.width) * 2 - 1;
@@ -167,24 +173,28 @@
             if (target?.object) {
                 const center = new THREE.Box3().setFromObject(target.object).getCenter(new THREE.Vector3());
                 targetLookAt.copy(center);
-                const name = target.name;
-                if (name === 'CelCupBall') targetCamPos.set(center.x, center.y + 0.15, center.z + 0.55);
-                else if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(name)) targetCamPos.set(center.x, center.y + 1.2, center.z + 0.3);
-                else if (['Plane005', 'Plane.005', 'Plane015', 'Plane.015'].includes(name)) targetCamPos.set(center.x + 1.1, center.y, center.z + 0.2);
-                else if (['Plane016', 'Plane.016'].includes(name)) targetCamPos.set(center.x, center.y + 0.1, center.z + 0.9);
-                else if (['Plane007', 'Plane.007', 'Plane008', 'Plane.008'].includes(name)) targetCamPos.set(center.x, center.y, center.z + 0.85);
+                const n = target.name;
+                if (n === 'CelCupBall') targetCamPos.set(center.x, center.y + 0.15, center.z + 0.55);
+                else if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(n)) targetCamPos.set(center.x, center.y + 1.2, center.z + 0.3);
+                else if (['Plane005', 'Plane.005', 'Plane015', 'Plane.015'].includes(n)) targetCamPos.set(center.x + 1.1, center.y, center.z + 0.2);
+                else if (['Plane016', 'Plane.016'].includes(n)) targetCamPos.set(center.x, center.y + 0.1, center.z + 0.9);
+                else if (['Plane007', 'Plane.007', 'Plane008', 'Plane.008'].includes(n)) targetCamPos.set(center.x, center.y, center.z + 0.85);
                 else targetCamPos.set(center.x, center.y, center.z + 0.8);
+
                 resetBtn.style.display = 'block';
             }
         });
+
         window.addEventListener('mousemove', (e) => {
             const intersects = updatePointerAndIntersect(e);
             document.body.style.cursor = (intersects.length && getClickableObject(intersects[0].object)) ? 'pointer' : 'default';
         });
+
         resetBtn.addEventListener('click', () => {
             targetCamPos.copy(initCamPos); targetLookAt.copy(initTarget);
             resetBtn.style.display = 'none';
         });
+
         window.addEventListener('resize', () => {
             camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
             renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
