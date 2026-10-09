@@ -25,13 +25,18 @@
 
     <script>
         const scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(0xd9541e, 4, 9);
+        scene.fog = new THREE.Fog(0xFF9C4C, 4, 9); // ปรับ Fog ให้เข้ากับสีพื้นหลังใหม่
 
         const bgCanvas = document.createElement('canvas');
         bgCanvas.width = 1; bgCanvas.height = 2;
         const ctx = bgCanvas.getContext('2d');
         const grad = ctx.createLinearGradient(0, 0, 0, 2);
-        grad.addColorStop(0, '#f6d365'); grad.addColorStop(0.55, '#fda085'); grad.addColorStop(1, '#556b2f');
+        
+        // ปรับเป็นโทนสี #FF9C4C
+        grad.addColorStop(0, '#FFE0C2');   // สีส้มอ่อนด้านบน
+        grad.addColorStop(0.55, '#FF9C4C'); // สีหลัก #FF9C4C
+        grad.addColorStop(1, '#E06A1B');   // สีส้มเข้มด้านล่าง
+        
         ctx.fillStyle = grad; ctx.fillRect(0, 0, 1, 2);
         scene.background = new THREE.CanvasTexture(bgCanvas);
 
