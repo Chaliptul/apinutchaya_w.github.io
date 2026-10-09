@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apinutchaya Art Studio</title>
     <style>
-        html, body { height: 100%; margin: 0; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
         #reset-btn {
             position: absolute; bottom: 24px; right: 24px; padding: 10px 18px;
@@ -22,25 +22,22 @@
 </head>
 <body> 
     <button id="reset-btn">Back to Studio</button>
-
     <script>
         const scene = new THREE.Scene();
-        const canvas = document.createElement('canvas');
-        canvas.width = 2;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
-        gradient.addColorStop(0.0, '#f6d365'); 
-        gradient.addColorStop(0.55, '#fda085'); 
-        gradient.addColorStop(1.0, '#556b2f'); 
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 2, 512);
-        const bgTexture = new THREE.CanvasTexture(canvas);
-        scene.background = bgTexture;
-        scene.fog = new THREE.Fog(0xd9541e, 8.0, 9.0);
+        scene.fog = new THREE.Fog(0xd9541e, 4.0, 9.0);
+
+        const bgCanvas = document.createElement('canvas');
+        bgCanvas.width = 1; bgCanvas.height = 2;
+        const ctx = bgCanvas.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, 0, 2);
+        grad.addColorStop(0.0, '#f6d365'); grad.addColorStop(0.55, '#fda085'); grad.addColorStop(1.0, '#556b2f');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, 1, 2);
+        scene.background = new THREE.CanvasTexture(bgCanvas);
+
         const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
         const initCamPos = new THREE.Vector3(0, 1.2, 2.5);
         camera.position.copy(initCamPos);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(innerWidth, innerHeight);
         renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -49,11 +46,11 @@
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(renderer.domElement);
+
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         const initTarget = new THREE.Vector3(0, 1, 0);
         controls.target.copy(initTarget);
-        controls.update();
 
         const dirLight = new THREE.DirectionalLight(0xfffaed, 1.2);
         dirLight.position.set(5, 8, 5);
@@ -63,202 +60,140 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.7), dirLight, new THREE.DirectionalLight(0xffffff, 0.3));
         const uniforms = {
             uTime: { value: 0.0 },
-            uLightDir: { value: new THREE.Vector3(0.4, 1.0, 0.8).normalize() },
-            uTexture: { value: new THREE.TextureLoader().load('https://threejs.org/examples/textures/uv_grid_opengl.jpg') }
+            uLightDir: { value: new THREE.Vector3(0.5, 1.0, 0.7).normalize() }
         };
-        const vertexShader = `
-            uniform float uTime;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-
-            void main() {
-                vUv = uv;
-                vNormal = normal;
-                vec3 pos = position;
-                pos.z += sin(pos.x * 5.0 + uTime) * 0.2;
-                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
+        const waveChunk = `
+            vec3 pos = position;
+            if (uAnimated) {
+                pos.x += sin(pos.y * 12.0 + uTime * 2.5) * 0.012;
+                pos.z += cos(pos.x * 12.0 + uTime * 2.0) * 0.012;
             }
         `;
-        const fragmentShader = `
-            precision mediump float;
-            uniform float uTime;
-            uniform sampler2D uTexture;
-            uniform vec3 uLightDir;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-
+        const celVertexShader = `
+            uniform float uTime; uniform bool uAnimated;
+            varying vec3 vNormal, vViewPosition;
             void main() {
-                vec3 color = texture2D(uTexture, vUv).rgb;
-                vec3 N = normalize(vNormal);
-                vec3 L = normalize(uLightDir);
-                float diffuse = max(dot(N, L), 0.0);
-                float ambient = clamp(diffuse * 4.0, 0.5, 1.0);
-                diffuse = smoothstep(0.5, 0.6, diffuse);
-                color = color * (diffuse + ambient);
-                gl_FragColor = vec4(color, 1.0);
+                vNormal = normal;
+                ${waveChunk}
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                vViewPosition = -mvPosition.xyz;
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `;
+
+        const celFragmentShader = `
+            precision mediump float;
+            uniform vec3 uLightDir, uBaseColor;
+            varying vec3 vNormal, vViewPosition;
+            void main() {
+                vec3 N = normalize(vNormal), L = normalize(uLightDir);
+                float NdotL = dot(N, L);
+                vec3 baseColor = (NdotL > 0.72) ? mix(uBaseColor, vec3(1.0, 1.0, 0.95), 0.75) : 
+                                 (NdotL > 0.25) ? uBaseColor : uBaseColor * 0.45;
+                float rimFactor = smoothstep(0.65, 0.7, 1.0 - max(dot(normalize(vViewPosition), N), 0.0));
+                gl_FragColor = vec4(mix(baseColor, baseColor * 0.35, rimFactor), 1.0);
             }
         `;
 
         const outlineVertexShader = `
-            uniform float uTime;
-            varying vec2 vUv;
-            varying vec3 vNormal;
+            uniform float uTime; uniform bool uAnimated;
             void main() {
-                vUv = uv;
-                vNormal = normal;
-                vec3 pos = position;
-                pos.z += sin(pos.x * 5.0 + uTime) * 0.2;
-                pos += normal * 0.03; 
-                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
+                ${waveChunk}
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos + normal * 0.003, 1.0);
             }
         `;
 
-        const outlineFragmentShader = `
-            precision mediump float;
-            uniform float uTime;
-            uniform sampler2D uTexture;
-            uniform vec3 uLightDir;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            void main() {
-                gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-            }
-        `;
-
-        const material = new THREE.ShaderMaterial({
-            vertexShader,
-            fragmentShader,
-            uniforms,
-            side: THREE.DoubleSide
-        });
-
-        const outlineMaterial = new THREE.ShaderMaterial({
-            vertexShader: outlineVertexShader,
-            fragmentShader: outlineFragmentShader,
-            uniforms,
-            side: THREE.BackSide
-        });
-
-        const celObjects = [];
-
-        function addPickableObject(name, geometry, position) {
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.name = name;
-            mesh.position.copy(position);
-            const outlineMesh = new THREE.Mesh(geometry, outlineMaterial);
-            mesh.add(outlineMesh);
-            scene.add(mesh);
-            celObjects.push(mesh);
-            return mesh;
+        function createCelMaterials(baseColor, isAnimated = false) {
+            const opts = { uniforms: { ...uniforms, uBaseColor: { value: baseColor }, uAnimated: { value: isAnimated } } };
+            return {
+                mat: new THREE.ShaderMaterial({ ...opts, vertexShader: celVertexShader, fragmentShader: celFragmentShader, side: THREE.DoubleSide }),
+                outlineMat: new THREE.ShaderMaterial({ ...opts, vertexShader: outlineVertexShader, fragmentShader: 'precision mediump float; void main(){ gl_FragColor = vec4(0.05, 0.03, 0.02, 1.0); }', side: THREE.BackSide })
+            };
         }
 
-        const celMesh = addPickableObject(
-            'CelShadedObject', 
-            new THREE.TorusKnotBufferGeometry(0.08, 0.03, 128, 32), 
-            new THREE.Vector3(0.8, 0.1, 0.1)
-        );
+        const cupBallGroup = new THREE.Group();
+        cupBallGroup.name = 'CelCupBall';
+        function createMeshWithOutline(geo, mats, pos) {
+            const mesh = new THREE.Mesh(geo, mats.mat);
+            mesh.add(new THREE.Mesh(geo, mats.outlineMat));
+            if (pos) mesh.position.copy(pos);
+            cupBallGroup.add(mesh);
+        }
+        createMeshWithOutline(new THREE.CylinderGeometry(0.03, 0.045, 0.12, 32), createCelMaterials(new THREE.Vector3(0.75, 0.275, 0.275), false)); // #BF4646
+        createMeshWithOutline(new THREE.IcosahedronGeometry(0.03, 2), createCelMaterials(new THREE.Vector3(0.494, 0.675, 0.71), true), new THREE.Vector3(0, 0.085, 0)); // #7EACB5
+        cupBallGroup.position.set(0, 0.75, 0.2);
+        scene.add(cupBallGroup);
+
         const dracoLoader = new THREE.DRACOLoader().setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-        const loader = new THREE.GLTFLoader().setDRACOLoader(dracoLoader).setMeshoptDecoder(MeshoptDecoder);
         let studioModel;
-        loader.load('https://chaliptul.github.io/apinutchaya_w.github.io/myartstudioclt.glb', (gltf) => {
+        new THREE.GLTFLoader().setDRACOLoader(dracoLoader).setMeshoptDecoder(MeshoptDecoder).load('https://chaliptul.github.io/apinutchaya_w.github.io/myartstudioclt.glb', (gltf) => {
             studioModel = gltf.scene;
-            studioModel.traverse(c => { 
-                if (c.isMesh) {
-                    c.castShadow = c.receiveShadow = true;
-                } 
-            });
+            studioModel.traverse(c => { if (c.isMesh) c.castShadow = c.receiveShadow = true; });
             scene.add(studioModel);
         }, undefined, console.error);
 
-        function lerp(a, b, t) {
-            return a + (b - a) * t;
-        }
-        const raycaster = new THREE.Raycaster();
-        const pointer = new THREE.Vector2();
-        let targetCamPos = initCamPos.clone();
-        let targetLookAt = initTarget.clone();
-        let isFocusing = false;
+        const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+        const targetCamPos = initCamPos.clone(), targetLookAt = initTarget.clone();
         const resetBtn = document.getElementById('reset-btn');
-        const clickableNames = [
-            'Plane004', 'Plane.004', 'Plane005', 'Plane.005',
-            'Plane006', 'Plane.006', 'Plane007', 'Plane.007',
-            'Plane008', 'Plane.008', 'Plane012', 'Plane.012',
-            'Plane013', 'Plane.013', 'Plane015', 'Plane.015',
-            'Plane016', 'Plane.016', 'Plane021', 'Plane.021',
-            'Plane022', 'Plane.022', 'Plane023', 'Plane.023',
-            'Plane024', 'Plane.024', 'CelShadedObject'
-        ];
+        const clickableNames = new Set([
+            'Plane004', 'Plane.004', 'Plane005', 'Plane.005', 'Plane006', 'Plane.006',
+            'Plane007', 'Plane.007', 'Plane008', 'Plane.008', 'Plane012', 'Plane.012',
+            'Plane013', 'Plane.013', 'Plane015', 'Plane.015', 'Plane016', 'Plane.016',
+            'Plane021', 'Plane.021', 'Plane022', 'Plane.022', 'Plane023', 'Plane.023',
+            'Plane024', 'Plane.024', 'CelCupBall'
+        ]);
         function getClickableObject(hitMesh) {
             let obj = hitMesh;
             while (obj && obj !== studioModel) {
-                const name = obj.name || obj.userData?.name || '';
-                if (clickableNames.includes(name)) return { object: obj, name: name };
+                const name = obj.name || obj.userData?.name;
+                if (clickableNames.has(name)) return { object: obj, name };
                 obj = obj.parent;
             }
             return null;
         }
-        renderer.domElement.addEventListener('click', onPick);
-        function onPick(e) {
-            if (e.target === resetBtn) return;
+        function updatePointerAndIntersect(e) {
             const r = renderer.domElement.getBoundingClientRect();
-            const x = (e.clientX ?? e.touches[0].clientX) - r.left;
-            const y = (e.clientY ?? e.touches[0].clientY) - r.top;
-            pointer.x = (x / r.width) * 2 - 1;
-            pointer.y = -(y / r.height) * 2 + 1;
+            pointer.x = (((e.clientX ?? e.touches?.[0]?.clientX ?? 0) - r.left) / r.width) * 2 - 1;
+            pointer.y = -(((e.clientY ?? e.touches?.[0]?.clientY ?? 0) - r.top) / r.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const targetsToIntersect = studioModel ? [studioModel, ...celObjects] : [...celObjects];
-            const intersects = raycaster.intersectObjects(targetsToIntersect, true);
-            if (intersects.length > 0) {
-                const target = getClickableObject(intersects[0].object) || { object: celMesh, name: 'CelShadedObject' };
-                if (target && target.object) {
-                    const center = new THREE.Box3().setFromObject(target.object).getCenter(new THREE.Vector3());
-                    targetLookAt.copy(center);
-                    if (target.name === 'CelShadedObject') {
-                        targetCamPos.set(center.x, center.y, center.z + 0.8);
-                    } else if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(target.name)) {
-                        targetCamPos.set(center.x, center.y + 1.2, center.z + 0.3);
-                    } else if (['Plane005', 'Plane.005', 'Plane015', 'Plane.015'].includes(target.name)) {
-                        targetCamPos.set(center.x + 1.1, center.y, center.z + 0.2);
-                    } else if (['Plane016', 'Plane.016'].includes(target.name)) {
-                        targetCamPos.set(center.x, center.y + 0.1, center.z + 0.9);
-                    } else if (['Plane007', 'Plane.007', 'Plane008', 'Plane.008'].includes(target.name)) {
-                        targetCamPos.set(center.x, center.y, center.z + 0.85);
-                    } else {
-                        targetCamPos.set(center.x, center.y, center.z + 0.8);
-                    }
-                    isFocusing = true;
-                    resetBtn.style.display = 'block';
-                }
-            }
+            return raycaster.intersectObjects(studioModel ? [studioModel, cupBallGroup] : [cupBallGroup], true);
         }
+
+        renderer.domElement.addEventListener('click', (e) => {
+            if (e.target === resetBtn) return;
+            const intersects = updatePointerAndIntersect(e);
+            if (!intersects.length) return;
+            const target = getClickableObject(intersects[0].object);
+            if (target?.object) {
+                const center = new THREE.Box3().setFromObject(target.object).getCenter(new THREE.Vector3());
+                targetLookAt.copy(center);
+                const name = target.name;
+                if (name === 'CelCupBall') targetCamPos.set(center.x, center.y + 0.15, center.z + 0.55);
+                else if (['Plane004', 'Plane.004', 'Plane006', 'Plane.006'].includes(name)) targetCamPos.set(center.x, center.y + 1.2, center.z + 0.3);
+                else if (['Plane005', 'Plane.005', 'Plane015', 'Plane.015'].includes(name)) targetCamPos.set(center.x + 1.1, center.y, center.z + 0.2);
+                else if (['Plane016', 'Plane.016'].includes(name)) targetCamPos.set(center.x, center.y + 0.1, center.z + 0.9);
+                else if (['Plane007', 'Plane.007', 'Plane008', 'Plane.008'].includes(name)) targetCamPos.set(center.x, center.y, center.z + 0.85);
+                else targetCamPos.set(center.x, center.y, center.z + 0.8);
+                resetBtn.style.display = 'block';
+            }
+        });
         window.addEventListener('mousemove', (e) => {
-            const r = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-            pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-            raycaster.setFromCamera(pointer, camera);
-            const targetsToIntersect = studioModel ? [studioModel, ...celObjects] : [...celObjects];
-            const intersects = raycaster.intersectObjects(targetsToIntersect, true);
-            const isHovered = intersects.length && getClickableObject(intersects[0].object);
-            document.body.style.cursor = isHovered ? 'pointer' : 'default';
+            const intersects = updatePointerAndIntersect(e);
+            document.body.style.cursor = (intersects.length && getClickableObject(intersects[0].object)) ? 'pointer' : 'default';
         });
         resetBtn.addEventListener('click', () => {
-            targetCamPos.copy(initCamPos);
-            targetLookAt.copy(initTarget);
+            targetCamPos.copy(initCamPos); targetLookAt.copy(initTarget);
             resetBtn.style.display = 'none';
         });
         window.addEventListener('resize', () => {
-            camera.aspect = innerWidth / innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(innerWidth, innerHeight);
-            renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+            camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
         });
+
         function animate(time) {
             uniforms.uTime.value = time * 0.001;
-            celMesh.position.y = lerp(0.5, 0.7, Math.sin(time * 0.002) * 0.5 + 0.5);
-            if (isFocusing) {
-                controls.target.lerp(targetLookAt, 0.05); //[cite: 5]
-                camera.position.lerp(targetCamPos, 0.05);
-            } 
+            controls.target.lerp(targetLookAt, 0.05);
+            camera.position.lerp(targetCamPos, 0.05);
             controls.update();
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
